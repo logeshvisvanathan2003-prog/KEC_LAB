@@ -1,6 +1,6 @@
 """
 KCE Lab Tracker — Backend v5.2 (Vercel Serverless)
-Admin: Labadmin@kce.edu / Kec@2026
+Admin: admin.kec@kongu.edu / Kec@2026
 Developed by Logesh (Cognentrz) — Adapted for Vercel by Claude
 """
 
@@ -1191,20 +1191,20 @@ def _seed():
         db.session.commit()
         print('✅  Labs seeded: CC1, CC2, CTS')
 
-    admin = AdminUser.query.filter_by(email='Labadmin@kce.edu').first()
+    admin = AdminUser.query.filter_by(email='admin.kec@kongu.edu').first()
     if not admin:
         admin = AdminUser(
-            email='Labadmin@kce.edu',
+            email='admin.kec@kongu.edu',
             password_hash=generate_password_hash('Kec@2026'),
             name='KEC Lab Admin'
         )
         db.session.add(admin)
         db.session.commit()
-        print('✅  Admin created: Labadmin@kce.edu / Kec@2026')
+        print('✅  Admin created: admin.kec@kongu.edu / Kec@2026')
     else:
         admin.password_hash = generate_password_hash('Kec@2026')
         db.session.commit()
-        print('✅  Admin password verified: Labadmin@kce.edu / Kec@2026')
+        print('✅  Admin password verified: admin.kec@kongu.edu / Kec@2026')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1228,7 +1228,7 @@ threading.Thread(target=_idle_watcher, daemon=True).start()
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     print(f'\n🚀  KCE Lab Tracker v5.2 — http://localhost:{port}')
-    print(f'📧  Admin: Labadmin@kce.edu | Password: Kec@2026')
+    print(f'📧  Admin: admin.kec@kongu.edu | Password: Kec@2026')
     print(f'🗄️   DB:    {_db_url[:50]}')
     print(f'🎨  Developed by Logesh (Cognentrz)\n')
     app.run(host='0.0.0.0', port=port, debug=False)

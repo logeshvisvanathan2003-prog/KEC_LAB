@@ -22,7 +22,7 @@ export default function AdminLogin() {
     setLoading(false)
   }
 
-  const fill = () => { setEmail('Labadmin@kce.edu'); setPassword('Kec@2026'); setError('') }
+  const fill = () => { setEmail('admin.kec@kongu.edu'); setPassword('Kec@2026'); setError('') }
 
   const inp = focused => ({
     width:'100%', height:38, padding:'0 12px',
