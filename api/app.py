@@ -37,21 +37,26 @@ else:
 
 app = Flask(__name__)
 
-# Handle CORS — allow all origins explicitly
+# ── CORS: handle preflight OPTIONS and inject headers on every response ───────
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin']      = request.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Methods']     = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers']     = 'Content-Type, Authorization, X-Agent-Key'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age']           = '86400'
+        return response
+
 @app.after_request
 def add_cors_headers(response):
-    origin = request.headers.get('Origin', '*')
-    response.headers['Access-Control-Allow-Origin']      = origin if origin else '*'
+    response.headers['Access-Control-Allow-Origin']      = request.headers.get('Origin', '*')
     response.headers['Access-Control-Allow-Credentials'] = 'true'
     response.headers['Access-Control-Allow-Methods']     = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers']     = 'Content-Type, Authorization, X-Agent-Key'
     return response
-
-CORS(app,
-     origins='*',
-     supports_credentials=False,
-     allow_headers=['Content-Type', 'Authorization', 'X-Agent-Key'],
-     methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
 
 app.config['SQLALCHEMY_DATABASE_URI']        = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
