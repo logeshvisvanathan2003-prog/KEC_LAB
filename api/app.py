@@ -37,13 +37,20 @@ else:
 
 app = Flask(__name__)
 
-_allowed_origins = os.getenv('ALLOWED_ORIGINS', '*')
-_origins_list = [o.strip() for o in _allowed_origins.split(',')] if _allowed_origins != '*' else '*'
+# Handle CORS — allow all origins explicitly
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get('Origin', '*')
+    response.headers['Access-Control-Allow-Origin']      = origin if origin else '*'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Methods']     = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers']     = 'Content-Type, Authorization, X-Agent-Key'
+    return response
 
 CORS(app,
-     origins=_origins_list,
-     supports_credentials=True,
-     allow_headers=['Content-Type', 'Authorization'],
+     origins='*',
+     supports_credentials=False,
+     allow_headers=['Content-Type', 'Authorization', 'X-Agent-Key'],
      methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
 
 app.config['SQLALCHEMY_DATABASE_URI']        = _db_url
