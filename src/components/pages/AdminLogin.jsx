@@ -93,7 +93,7 @@ export default function AdminLogin() {
           <form onSubmit={submit} style={{display:'flex',flexDirection:'column',gap:14}}>
             <div>
               <label style={{display:'block',fontSize:12,fontWeight:500,color:'var(--txt2)',marginBottom:6}}>Email</label>
-              <input style={inp(focusEmail)} type="email" placeholder="Labadmin@kce.edu"
+              <input style={inp(focusEmail)} type="email" placeholder="Enter your email"
                 value={email} onChange={e=>setEmail(e.target.value)} required
                 onFocus={()=>setFocusEmail(true)} onBlur={()=>setFocusEmail(false)}/>
             </div>
@@ -101,7 +101,7 @@ export default function AdminLogin() {
               <label style={{display:'block',fontSize:12,fontWeight:500,color:'var(--txt2)',marginBottom:6}}>Password</label>
               <div style={{position:'relative'}}>
                 <input style={{...inp(focusPwd),paddingRight:36}}
-                  type={showPwd?'text':'password'} placeholder="••••••••"
+                  type={showPwd?'text':'password'} placeholder="Enter your password"
                   value={password} onChange={e=>setPassword(e.target.value)} required
                   onFocus={()=>setFocusPwd(true)} onBlur={()=>setFocusPwd(false)}/>
                 <button type="button" onClick={()=>setShowPwd(v=>!v)}
@@ -130,22 +130,6 @@ export default function AdminLogin() {
             </button>
           </form>
 
-          <div style={{marginTop:20,padding:'12px 14px',borderRadius:'var(--r)',
-            background:'var(--bg2)',border:'0.5px solid var(--border)'}}>
-            <div style={{fontSize:11,fontWeight:500,color:'var(--txt3)',marginBottom:8,
-              textTransform:'uppercase',letterSpacing:'0.05em'}}>Default credentials</div>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div>
-                <div style={{fontSize:13,color:'var(--txt)',fontWeight:500}}>Labadmin@kce.edu</div>
-                <div style={{fontFamily:'monospace',fontSize:12,color:'var(--txt3)',marginTop:2}}>Kec@2026</div>
-              </div>
-              <button onClick={fill} style={{padding:'5px 12px',borderRadius:'var(--r)',
-                background:'var(--bg)',border:'0.5px solid var(--border2)',
-                color:'var(--txt2)',fontSize:12,fontWeight:500}}>
-                Fill
-              </button>
-            </div>
-          </div>
 
           <div style={{marginTop:20,textAlign:'center',fontSize:11,color:'var(--txt3)'}}>
             Developed by Logesh · Cognentrz
