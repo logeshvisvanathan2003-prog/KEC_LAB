@@ -1213,14 +1213,34 @@ def _seed():
 
 with app.app_context():
     try:
-        # FIXED: Never drop tables on restart - invalidates JWT tokens
-        # Just create tables if they dont exist yet
         db.create_all()
         print("[DB] Tables ready.")
     except Exception as e:
         print(f"[DB] Setup error (non-fatal): {e}")
 
     _seed()
+
+    # One-time password reset via env var (remove after use)
+    _reset_email = os.getenv('RESET_ADMIN_EMAIL', '').strip()
+    _reset_pass  = os.getenv('RESET_ADMIN_PASSWORD', '').strip()
+    if _reset_email and _reset_pass:
+        try:
+            _admin = AdminUser.query.filter_by(email=_reset_email).first()
+            if _admin:
+                _admin.password_hash = generate_password_hash(_reset_pass)
+                db.session.commit()
+                print(f'[RESET] Password updated for {_reset_email}')
+            else:
+                _admin = AdminUser(
+                    email=_reset_email,
+                    name='KCE Lab Admin',
+                    password_hash=generate_password_hash(_reset_pass)
+                )
+                db.session.add(_admin)
+                db.session.commit()
+                print(f'[RESET] Admin created: {_reset_email}')
+        except Exception as e:
+            print(f'[RESET] Failed: {e}')
 
 threading.Thread(target=_idle_watcher, daemon=True).start()
 
