@@ -430,7 +430,13 @@ def system_login():
         return jsonify({'error': 'Username and password required'}), 400
 
     try:
-        sys_user = SystemUser.query.filter_by(username=sys_username).first()
+        # Accept both email and username
+        sys_user = SystemUser.query.filter(
+            db.or_(
+                SystemUser.username == sys_username,
+                SystemUser.username == sys_username.split('@')[0]
+            )
+        ).first()
         if not sys_user:
             return jsonify({'error': 'Invalid username or password'}), 401
         if not sys_user.is_active:
