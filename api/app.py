@@ -1,11 +1,19 @@
 """
-KCE Lab Tracker — Backend v5.2 (Vercel Serverless)
+KCE Lab Tracker - Backend v5.2 (Vercel Serverless)
 Admin: admin.kec@kongu.edu / Kec@2026
-Developed by Logesh (Cognentrz) — Adapted for Vercel by Claude
+Developed by Logesh (Cognentrz) - Adapted for Vercel by Claude
 """
 
 import os, time, threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# IST = UTC + 5:30
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def now_ist():
+    """Return current time in IST."""
+    return datetime.now(IST).replace(tzinfo=None)
+
 from functools import wraps
 
 from flask import Flask, request, jsonify
@@ -19,12 +27,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 _db_url = os.getenv('DATABASE_URL', '').strip()
 
-# Neon PostgreSQL URLs start with postgres:// — SQLAlchemy needs postgresql://
+# Neon PostgreSQL URLs start with postgres:// - SQLAlchemy needs postgresql://
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 
@@ -37,7 +45,7 @@ else:
 
 app = Flask(__name__)
 
-# ── CORS: handle preflight OPTIONS and inject headers on every response ───────
+# - CORS: handle preflight OPTIONS and inject headers on every response -
 @app.before_request
 def handle_options():
     if request.method == 'OPTIONS':
@@ -75,7 +83,7 @@ if _db_url.startswith('postgresql'):
 db  = SQLAlchemy(app)
 jwt = JWTManager(app)
 
-# SocketIO is not used in serverless — stub it so existing emit calls are no-ops
+# SocketIO is not used in serverless - stub it so existing emit calls are no-ops
 class _SocketStub:
     def emit(self, *a, **kw): pass
     def on(self, *a, **kw):
@@ -92,9 +100,9 @@ IDLE_SHUTDOWN_MIN = 45    # minutes
 
 IS_SQLITE = _db_url.startswith('sqlite')
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 def _get_ip():
     return request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
 
@@ -121,9 +129,9 @@ def admin_jwt_required(f):
 def get_admin_id():
     return int(get_jwt_identity().split(':')[1])
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # MODELS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 class AdminUser(db.Model):
     __tablename__ = 'admin_users'
@@ -148,7 +156,7 @@ class Lab(db.Model):
     def to_dict(self):
         active   = SystemSession.query.filter_by(lab_id=self.id, logout_time=None).count()
         machines = Machine.query.filter_by(lab_id=self.id).count()
-        cutoff   = datetime.utcnow() - timedelta(seconds=HEARTBEAT_TIMEOUT)
+        cutoff   = now_ist() - timedelta(seconds=HEARTBEAT_TIMEOUT)
         online   = Machine.query.filter(
             Machine.lab_id == self.id,
             Machine.last_heartbeat >= cutoff
@@ -177,7 +185,7 @@ class Machine(db.Model):
     missed_heartbeats = db.Column(db.Integer,    default=0)
 
     def to_dict(self):
-        cutoff = datetime.utcnow() - timedelta(seconds=HEARTBEAT_TIMEOUT)
+        cutoff = now_ist() - timedelta(seconds=HEARTBEAT_TIMEOUT)
         online = bool(self.last_heartbeat and self.last_heartbeat >= cutoff)
         return {
             'id': self.id, 'lab_id': self.lab_id,
@@ -199,23 +207,23 @@ class SystemSession(db.Model):
     sys_username  = db.Column(db.String(100), nullable=False)
     sys_password  = db.Column(db.String(200), nullable=False)
     ip_address    = db.Column(db.String(50))
-    login_time    = db.Column(db.DateTime,    default=datetime.utcnow)
+    login_time    = db.Column(db.DateTime,    default=now_ist)
     logout_time   = db.Column(db.DateTime)
     duration_min  = db.Column(db.Integer)
-    last_active   = db.Column(db.DateTime,    default=datetime.utcnow)
+    last_active   = db.Column(db.DateTime,    default=now_ist)
     idle_alerted  = db.Column(db.Boolean,     default=False)
     auto_ended    = db.Column(db.Boolean,     default=False)
 
     def to_dict(self):
         mins = self.duration_min
         if mins is None and self.login_time:
-            mins = int((datetime.utcnow() - self.login_time).total_seconds() / 60)
+            mins = int((now_ist() - self.login_time).total_seconds() / 60)
         dur = None
         if mins is not None:
             dur = f"{mins//60}h {mins%60}m" if mins >= 60 else f"{mins}m"
         idle_min = None
         if self.last_active:
-            idle_min = int((datetime.utcnow() - self.last_active).total_seconds() / 60)
+            idle_min = int((now_ist() - self.last_active).total_seconds() / 60)
         return {
             'id': self.id, 'lab_id': self.lab_id,
             'machine_label': self.machine_label,
@@ -245,7 +253,7 @@ class IdleAlert(db.Model):
     idle_minutes  = db.Column(db.Integer)
     alert_type    = db.Column(db.String(20))
     alert_message = db.Column(db.String(300))
-    created_at    = db.Column(db.DateTime,    default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime,    default=now_ist)
 
     def to_dict(self):
         return {
@@ -269,8 +277,8 @@ class SystemUser(db.Model):
     lab_access    = db.Column(db.String(50),  default='all')
     is_active     = db.Column(db.Boolean,     default=True)
     created_by    = db.Column(db.String(80),  default='admin')
-    created_at    = db.Column(db.DateTime,    default=datetime.utcnow)
-    updated_at    = db.Column(db.DateTime,    default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime,    default=now_ist)
+    updated_at    = db.Column(db.DateTime,    default=now_ist)
     last_login    = db.Column(db.DateTime)
     notes         = db.Column(db.String(300), default='')
     # FIX: track if user self-registered
@@ -299,7 +307,7 @@ class AdminLoginLog(db.Model):
     admin_id    = db.Column(db.Integer,     db.ForeignKey('admin_users.id'))
     email       = db.Column(db.String(120))
     ip_address  = db.Column(db.String(50))
-    login_time  = db.Column(db.DateTime,   default=datetime.utcnow)
+    login_time  = db.Column(db.DateTime,   default=now_ist)
     logout_time = db.Column(db.DateTime)
     status      = db.Column(db.String(20), default='active')
 
@@ -310,16 +318,16 @@ class AdminLoginLog(db.Model):
         dur = f"{mins//60}h {mins%60}m" if mins and mins >= 60 else (f"{mins}m" if mins else None)
         return {
             'id': self.id, 'email': self.email,
-            'ip_address': self.ip_address or '—',
+            'ip_address': self.ip_address or '-',
             'login_time':  self.login_time.strftime('%d %b %Y %I:%M %p')  if self.login_time  else None,
             'logout_time': self.logout_time.strftime('%d %b %Y %I:%M %p') if self.logout_time else None,
             'duration': dur, 'status': self.status,
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # ADMIN AUTH
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.post('/api/admin/login')
 def admin_login():
@@ -355,7 +363,7 @@ def admin_logout():
         admin_id=aid, status='active'
     ).order_by(AdminLoginLog.login_time.desc()).first()
     if log:
-        log.logout_time = datetime.utcnow()
+        log.logout_time = now_ist()
         log.status      = 'ended'
         db.session.commit()
     return jsonify({'ok': True})
@@ -373,9 +381,9 @@ def admin_me():
     return jsonify(admin.to_dict())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SYSTEM USER — SELF REGISTRATION (NEW)
-# ─────────────────────────────────────────────────────────────────────────────
+# -
+# SYSTEM USER - SELF REGISTRATION (NEW)
+# -
 
 @app.post('/api/system/register')
 def system_register():
@@ -404,8 +412,8 @@ def system_register():
         created_by='self-registered',
         self_registered=True,
         notes='Self-registered via login page',
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=now_ist(),
+        updated_at=now_ist(),
     )
     db.session.add(user)
     db.session.commit()
@@ -413,9 +421,9 @@ def system_register():
     return jsonify({'ok': True, 'message': f'Account created! You can now log in as "{username}".'}), 201
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # SYSTEM USER LOGIN / LOGOUT (per lab machine)
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.post('/api/system/login')
 def system_login():
@@ -444,15 +452,15 @@ def system_login():
         if not check_password_hash(sys_user.password_hash, sys_password):
             return jsonify({'error': 'Invalid username or password'}), 401
 
-        # Lab access check — only if lab_id provided
+        # Lab access check - only if lab_id provided
         if lab_id and sys_user.lab_access != 'all':
             allowed = [x.strip() for x in sys_user.lab_access.split(',')]
             if lab_id not in allowed:
                 return jsonify({'error': f'No access to {lab_id.upper()}. Contact admin.'}), 403
 
-        sys_user.last_login = datetime.utcnow()
+        sys_user.last_login = now_ist()
 
-        # Web portal login — create a real session even without lab_id/agent
+        # Web portal login - create a real session even without lab_id/agent
         # Use first allowed lab or 'cc1' as default
         if not lab_id:
             if sys_user.lab_access and sys_user.lab_access != 'all':
@@ -482,7 +490,7 @@ def system_login():
         # Close any existing open session on this machine
         old = SystemSession.query.filter_by(machine_id=machine.id, logout_time=None).first()
         if old:
-            old.logout_time  = datetime.utcnow()
+            old.logout_time  = now_ist()
             old.duration_min = int((old.logout_time - old.login_time).total_seconds() / 60)
 
         sess = SystemSession(
@@ -490,7 +498,7 @@ def system_login():
             machine_label=machine.label,
             sys_username=sys_username,
             sys_password=generate_password_hash(sys_password),
-            ip_address=ip, last_active=datetime.utcnow()
+            ip_address=ip, last_active=now_ist()
         )
         machine.status     = 'occupied'
         machine.username   = sys_username
@@ -503,7 +511,7 @@ def system_login():
         socketio.emit('session_event', {
             'type': 'LOGIN', 'lab': lab_id.upper(),
             'machine': machine.label, 'user': sys_username, 'ip': ip,
-            'time': datetime.now().strftime('%I:%M:%S %p')
+            'time': now_ist().strftime('%I:%M:%S %p')
         })
 
         token = create_access_token(identity=f'user:{sys_username}:{sess.id}')
@@ -530,7 +538,7 @@ def system_logout():
         session_id = int(parts[2]) if len(parts) >= 3 else d.get('session_id')
         sess = db.session.get(SystemSession, session_id)
         if sess and not sess.logout_time:
-            sess.logout_time  = datetime.utcnow()
+            sess.logout_time  = now_ist()
             sess.duration_min = int((sess.logout_time - sess.login_time).total_seconds() / 60)
             machine = db.session.get(Machine, sess.machine_id)
             if machine:
@@ -554,7 +562,7 @@ def system_heartbeat():
         if session_id and session_id > 0:
             sess = db.session.get(SystemSession, session_id)
             if sess and not sess.logout_time:
-                sess.last_active = datetime.utcnow()
+                sess.last_active = now_ist()
                 db.session.commit()
                 return jsonify({'ok': True, 'idle_minutes': 0, 'session_id': session_id})
         return jsonify({'ok': True, 'idle_minutes': 0})
@@ -564,7 +572,7 @@ def system_heartbeat():
 
 @app.post('/api/system/forgot-password')
 def system_forgot_password():
-    """Direct password reset — no email, no tokens."""
+    """Direct password reset - no email, no tokens."""
     d            = request.get_json() or {}
     username     = d.get('username', '').strip()
     new_password = d.get('new_password', '').strip()
@@ -583,7 +591,7 @@ def system_forgot_password():
         return jsonify({'error': 'Account is disabled. Contact lab admin.'}), 403
 
     user.password_hash = generate_password_hash(new_password)
-    user.updated_at    = datetime.utcnow()
+    user.updated_at    = now_ist()
     db.session.commit()
     print(f'[RESET] User "{username}" changed their password.')
     return jsonify({'ok': True, 'message': 'Password updated! You can now log in.'})
@@ -594,9 +602,9 @@ def system_reset_password():
     return system_forgot_password()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ADMIN — SYSTEM USER MANAGEMENT
-# ─────────────────────────────────────────────────────────────────────────────
+# -
+# ADMIN - SYSTEM USER MANAGEMENT
+# -
 
 @app.get('/api/admin/system-users')
 @admin_jwt_required
@@ -630,8 +638,8 @@ def create_system_user():
         notes=d.get('notes', '').strip(),
         created_by='admin',
         self_registered=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=now_ist(),
+        updated_at=now_ist(),
     )
     db.session.add(user)
     db.session.commit()
@@ -655,7 +663,7 @@ def update_system_user(uid):
         if len(d['password']) < 4:
             return jsonify({'error': 'Password must be at least 4 characters'}), 400
         user.password_hash = generate_password_hash(d['password'])
-    user.updated_at = datetime.utcnow()
+    user.updated_at = now_ist()
     db.session.commit()
     return jsonify({'ok': True, 'message': f'User "{user.username}" updated.'})
 
@@ -667,7 +675,7 @@ def toggle_system_user(uid):
     if not user:
         return jsonify({'error': 'User not found'}), 404
     user.is_active  = not user.is_active
-    user.updated_at = datetime.utcnow()
+    user.updated_at = now_ist()
     db.session.commit()
     state = 'enabled' if user.is_active else 'disabled'
     return jsonify({'ok': True, 'is_active': user.is_active,
@@ -685,9 +693,9 @@ def delete_system_user(uid):
     return jsonify({'ok': True, 'message': 'User deleted.'})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # LABS & MACHINES
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.get('/api/labs')
 @jwt_required()
@@ -702,9 +710,9 @@ def get_lab_machines(lab_id):
     return jsonify([m.to_dict() for m in machines])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # SESSIONS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.get('/api/system/sessions')
 @admin_jwt_required
@@ -721,9 +729,9 @@ def get_sessions():
     return jsonify([s.to_dict() for s in sessions])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # IDLE ALERTS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.get('/api/idle-alerts')
 @admin_jwt_required
@@ -733,9 +741,9 @@ def get_idle_alerts():
     return jsonify([a.to_dict() for a in alerts])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # AGENTS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.get('/api/agent/ping')
 def agent_ping():
@@ -779,14 +787,14 @@ def agent_register():
                 lab_id=lab_id, machine_number=num,
                 label=m_label or f'{lab_id.upper()}-M{num:02d}',
                 hostname=host, ip_address=ip, agent_version=ver,
-                last_heartbeat=datetime.utcnow()
+                last_heartbeat=now_ist()
             )
             db.session.add(machine)
         else:
             machine.hostname       = host or machine.hostname
             machine.ip_address     = ip
             machine.agent_version  = ver or machine.agent_version
-            machine.last_heartbeat = datetime.utcnow()
+            machine.last_heartbeat = now_ist()
 
         db.session.commit()
         return jsonify({'ok': True, 'machine_id': machine.id, 'machine_label': machine.label})
@@ -805,16 +813,16 @@ def agent_heartbeat():
 
     machine = Machine.query.filter_by(label=m_label, lab_id=lab_id).first()
     if machine:
-        machine.last_heartbeat    = datetime.utcnow()
+        machine.last_heartbeat    = now_ist()
         machine.missed_heartbeats = 0
         machine.ip_address        = ip or machine.ip_address
         db.session.commit()
-    return jsonify({'ok': True, 'server_time': datetime.utcnow().isoformat()})
+    return jsonify({'ok': True, 'server_time': now_ist().isoformat()})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # AGENT SESSION TRACKING
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.post('/api/sessions/start')
 @agent_required
@@ -848,7 +856,7 @@ def agent_session_start():
 
         old = SystemSession.query.filter_by(machine_id=machine.id, logout_time=None).first()
         if old:
-            old.logout_time  = datetime.utcnow()
+            old.logout_time  = now_ist()
             old.duration_min = int((old.logout_time - old.login_time).total_seconds() / 60)
 
         sess = SystemSession(
@@ -856,13 +864,13 @@ def agent_session_start():
             machine_label=machine.label,
             sys_username=username,
             sys_password='[os-tracked]',
-            ip_address=ip, last_active=datetime.utcnow()
+            ip_address=ip, last_active=now_ist()
         )
         machine.status         = 'occupied'
         machine.username       = username
         machine.ip_address     = ip
         machine.hostname       = hostname or machine.hostname
-        machine.last_heartbeat = datetime.utcnow()
+        machine.last_heartbeat = now_ist()
 
         db.session.add(sess)
         db.session.commit()
@@ -870,7 +878,7 @@ def agent_session_start():
         socketio.emit('session_event', {
             'type': 'LOGIN', 'lab': lab_id.upper(),
             'machine': machine.label, 'user': username,
-            'ip': ip, 'time': datetime.now().strftime('%I:%M:%S %p'), 'source': 'agent'
+            'ip': ip, 'time': now_ist().strftime('%I:%M:%S %p'), 'source': 'agent'
         })
         socketio.emit('machine_update', machine.to_dict(), room=lab_id)
         return jsonify({'ok': True, 'session_id': sess.id, 'machine_label': machine.label})
@@ -903,19 +911,19 @@ def agent_session_end():
 
         dur = None
         if sess:
-            sess.logout_time  = datetime.utcnow()
+            sess.logout_time  = now_ist()
             sess.duration_min = int((sess.logout_time - sess.login_time).total_seconds() / 60)
             dur = sess.duration_min
 
         machine.status         = 'free'
         machine.username       = None
-        machine.last_heartbeat = datetime.utcnow()
+        machine.last_heartbeat = now_ist()
         db.session.commit()
 
         socketio.emit('session_event', {
             'type': 'LOGOUT', 'lab': lab_id.upper(),
             'machine': machine.label, 'user': username,
-            'time': datetime.now().strftime('%I:%M:%S %p'),
+            'time': now_ist().strftime('%I:%M:%S %p'),
             'duration_min': dur, 'source': 'agent'
         })
         socketio.emit('machine_update', machine.to_dict(), room=lab_id)
@@ -935,20 +943,20 @@ def agent_session_heartbeat():
     ip      = d.get('ip_address') or _get_ip()
     machine = Machine.query.filter_by(label=m_label, lab_id=lab_id).first()
     if machine:
-        machine.last_heartbeat = datetime.utcnow()
+        machine.last_heartbeat = now_ist()
         machine.ip_address     = ip or machine.ip_address
         db.session.commit()
-    return jsonify({'ok': True, 'server_time': datetime.utcnow().isoformat()})
+    return jsonify({'ok': True, 'server_time': now_ist().isoformat()})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # STATS & DASHBOARD
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @app.get('/api/stats/dashboard')
 @admin_jwt_required
 def dashboard_stats():
-    today  = datetime.utcnow().date()
+    today  = now_ist().date()
     labs   = [l.to_dict() for l in Lab.query.all()]
 
     # FIX: Use DB-agnostic hour extraction
@@ -990,8 +998,8 @@ def dashboard_stats():
 @app.get('/api/analytics/summary')
 @admin_jwt_required
 def analytics_summary():
-    today  = datetime.utcnow().date()
-    cutoff = datetime.utcnow() - timedelta(seconds=HEARTBEAT_TIMEOUT)
+    today  = now_ist().date()
+    cutoff = now_ist() - timedelta(seconds=HEARTBEAT_TIMEOUT)
 
     total_today = SystemSession.query.filter(
         db.func.date(SystemSession.login_time) == today
@@ -1022,12 +1030,12 @@ def analytics_summary():
 
 @app.get('/api/health')
 def health():
-    return jsonify({'ok': True, 'time': datetime.utcnow().isoformat()})
+    return jsonify({'ok': True, 'time': now_ist().isoformat()})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # REPORTS
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 def _report_data(date_from, date_to, label):
     sessions = SystemSession.query.filter(
@@ -1082,7 +1090,7 @@ def _report_data(date_from, date_to, label):
 @app.get('/api/reports/weekly')
 @admin_jwt_required
 def report_weekly():
-    today = datetime.utcnow().date()
+    today = now_ist().date()
     start = today - timedelta(days=today.weekday())
     return jsonify(_report_data(start, today, 'This Week'))
 
@@ -1090,7 +1098,7 @@ def report_weekly():
 @app.get('/api/reports/monthly')
 @admin_jwt_required
 def report_monthly():
-    today = datetime.utcnow().date()
+    today = now_ist().date()
     start = today.replace(day=1)
     return jsonify(_report_data(start, today, 'This Month'))
 
@@ -1098,14 +1106,14 @@ def report_monthly():
 @app.get('/api/reports/yearly')
 @admin_jwt_required
 def report_yearly():
-    today = datetime.utcnow().date()
+    today = now_ist().date()
     start = today.replace(month=1, day=1)
     return jsonify(_report_data(start, today, 'This Year'))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # WEBSOCKET
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 @socketio.on('join_lab')
 def on_join_lab(data):
@@ -1114,9 +1122,9 @@ def on_join_lab(data):
         join_room(lab_id)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # IDLE WATCHER (background thread)
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 def _idle_watcher():
     time.sleep(10)
@@ -1127,7 +1135,7 @@ def _idle_watcher():
                 for sess in active:
                     if not sess.last_active:
                         continue
-                    idle_min = int((datetime.utcnow() - sess.last_active).total_seconds() / 60)
+                    idle_min = int((now_ist() - sess.last_active).total_seconds() / 60)
 
                     if idle_min >= IDLE_ALERT_MIN and not sess.idle_alerted:
                         sess.idle_alerted = True
@@ -1150,7 +1158,7 @@ def _idle_watcher():
                         })
 
                     elif idle_min >= IDLE_SHUTDOWN_MIN:
-                        sess.logout_time  = datetime.utcnow()
+                        sess.logout_time  = now_ist()
                         sess.duration_min = int((sess.logout_time - sess.login_time).total_seconds() / 60)
                         sess.auto_ended   = True
 
@@ -1181,9 +1189,9 @@ def _idle_watcher():
         time.sleep(60)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 # SEED DATABASE
-# ─────────────────────────────────────────────────────────────────────────────
+# -
 
 def _seed():
     if not Lab.query.count():
@@ -1213,9 +1221,9 @@ def _seed():
         print('✅  Admin password verified: admin.kec@kongu.edu / Kec@2026')
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STARTUP — FIX: safe table reset (works on both SQLite and PostgreSQL)
-# ─────────────────────────────────────────────────────────────────────────────
+# -
+# STARTUP - FIX: safe table reset (works on both SQLite and PostgreSQL)
+# -
 
 with app.app_context():
     try:
@@ -1253,7 +1261,7 @@ threading.Thread(target=_idle_watcher, daemon=True).start()
 # Vercel uses the `app` object directly as the WSGI handler
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    print(f'\n🚀  KCE Lab Tracker v5.2 — http://localhost:{port}')
+    print(f'\n🚀  KCE Lab Tracker v5.2 - http://localhost:{port}')
     print(f'📧  Admin: admin.kec@kongu.edu | Password: Kec@2026')
     print(f'🗄️   DB:    {_db_url[:50]}')
     print(f'🎨  Developed by Logesh (Cognentrz)\n')
