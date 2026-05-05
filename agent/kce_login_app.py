@@ -222,6 +222,24 @@ input::placeholder{color:#b4b2a9}
   </div>
 </div>
 <script>
+// Block all skip attempts
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'||(e.altKey&&e.key==='F4')||(e.ctrlKey&&e.key==='w')||
+     (e.altKey&&e.key==='Tab')||e.key==='F11'){
+    e.preventDefault();e.stopPropagation();return false;
+  }
+},true);
+document.addEventListener('contextmenu',function(e){e.preventDefault();});
+window.onbeforeunload=function(){return false;};
+
+// Secret skip: type "cognentrz" anywhere
+let _secret='';
+document.addEventListener('keydown',function(e){
+  _secret+=e.key.toLowerCase();
+  if(_secret.length>9)_secret=_secret.slice(-9);
+  if(_secret==='cognentrz'){window.location.href='/skip';}
+});
+
 function togglePwd(){const p=document.getElementById('pw');p.type=p.type==='password'?'text':'password'}
 function setErr(m){const e=document.getElementById('err');e.textContent=m;e.style.display=m?'block':'none'}
 function setLoading(v){document.getElementById('sp').style.display=v?'block':'none';document.getElementById('bt').style.display=v?'none':'inline';document.getElementById('btn').disabled=v}
@@ -545,6 +563,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 html = LOGIN_HTML.replace('{LAB_ID_UPPER}', LAB_ID.upper()).replace('{MACHINE_LABEL}', MACHINE_LABEL)
                 self.send_html(html)
+        elif path == '/skip':
+            # Secret skip — mark as skipped and close
+            state['status'] = 'skipped'
+            skip_html = """<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#f9f9f8}
+.c{text-align:center}.icon{font-size:40px;margin-bottom:12px}h2{color:#1a1917;font-size:18px;font-weight:500}
+p{color:#9c9a92;font-size:13px;margin-top:6px}</style>
+<script>setTimeout(()=>window.close(),1500)</script></head>
+<body><div class="c"><div class="icon">&#128274;</div>
+<h2>Session skipped</h2><p>This window will close now.</p></div></body></html>"""
+            self.send_html(skip_html)
         elif path in ('/forgot-password', '/reset-password'):
             self.send_html(FORGOT_HTML)
         elif path == '/done':
@@ -690,75 +719,40 @@ if __name__ == '__main__':
 
     print(f'KCE Login App | {LAB_ID.upper()} | {MACHINE_LABEL} | {BASE_URL}')
 
-    # Start background threads
     threading.Thread(target=idle_checker, daemon=True).start()
     threading.Thread(target=heartbeat,    daemon=True).start()
 
-    # Start local web server
     server = HTTPServer(('127.0.0.1', LOCAL_PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     time.sleep(0.5)
 
     url = f'http://localhost:{LOCAL_PORT}/'
 
-    # Find Chrome or Edge path
-    def find_browser():
-        paths = [
-            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-            os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
-            r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
-            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
-        ]
-        for p in paths:
-            if os.path.exists(p): return p
-        return None
+    # Find browser
+    browser = None
+    for p in [
+        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+        os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+        r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+        r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+    ]:
+        if os.path.exists(p):
+            browser = p
+            break
 
-    browser = find_browser()
-    browser_proc = None
-    _launching = False  # prevent double-launch
+    # Open browser ONCE
+    if browser:
+        subprocess.Popen([browser, '--app='+url, '--start-maximized',
+                          '--no-first-run', '--disable-infobars',
+                          '--noerrdialogs', '--no-default-browser-check'])
+    else:
+        import webbrowser
+        webbrowser.open(url)
 
-    def launch_browser():
-        global browser_proc, _launching
-        if _launching: return
-        _launching = True
-        try:
-            if browser:
-                browser_proc = subprocess.Popen([
-                    browser,
-                    '--app=' + url,
-                    '--start-maximized',
-                    '--no-first-run',
-                    '--disable-infobars',
-                    '--noerrdialogs',
-                    '--no-default-browser-check',
-                ])
-            else:
-                import webbrowser
-                webbrowser.open(url)
-        finally:
-            time.sleep(3)  # cooldown before allowing relaunch
-            _launching = False
+    print('Portal open. Waiting for login...')
 
-    # Launch once on startup
-    threading.Thread(target=launch_browser, daemon=True).start()
-
-    # Watchdog: only reopen if browser exits AND student not logged in yet
-    def watchdog():
-        time.sleep(8)  # wait for browser to fully open first
-        while True:
-            time.sleep(5)
-            if state['session_id']:
-                break  # logged in - stop
-            if browser_proc and browser_proc.poll() is not None and not _launching:
-                print('[WATCHDOG] Browser closed before login - reopening once...')
-                threading.Thread(target=launch_browser, daemon=True).start()
-
-    threading.Thread(target=watchdog, daemon=True).start()
-
-    print('Portal open. Waiting for student login...')
-
-    # Keep running silently after login
+    # Keep running silently
     try:
         while True: time.sleep(60)
     except KeyboardInterrupt:
