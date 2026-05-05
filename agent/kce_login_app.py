@@ -17,6 +17,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 import urllib.request, urllib.error
 
+# Hide console window immediately (Windows only)
+try:
+    import ctypes
+    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+except: pass
+
 # Load .env
 _env = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 if os.path.exists(_env):
@@ -149,6 +155,7 @@ LOGIN_HTML = """<!DOCTYPE html>
 *{box-sizing:border-box;margin:0;padding:0}
 *,*::before,*::after{cursor:none!important}
 body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:100vh;display:flex;-webkit-font-smoothing:antialiased;font-size:14px;overflow:hidden}
+html,body{width:100%;height:100%}
 .left{width:320px;flex-shrink:0;background:#fff;border-right:0.5px solid rgba(0,0,0,0.1);padding:36px 30px;display:flex;flex-direction:column;gap:0}
 .logo{display:flex;align-items:center;gap:10px;margin-bottom:40px}
 .li{width:30px;height:30px;background:#1a1917;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -239,6 +246,18 @@ document.addEventListener('keydown',function(e){
   if(_secret.length>9)_secret=_secret.slice(-9);
   if(_secret==='cognentrz'){window.location.href='/skip';}
 });
+
+// Prevent minimize - refocus when window loses focus
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){
+    setTimeout(function(){window.focus();},100);
+  }
+});
+window.addEventListener('blur',function(){
+  setTimeout(function(){window.focus();},100);
+});
+// Keep window on top
+window.addEventListener('focus',function(){window.focus();});
 
 function togglePwd(){const p=document.getElementById('pw');p.type=p.type==='password'?'text':'password'}
 function setErr(m){const e=document.getElementById('err');e.textContent=m;e.style.display=m?'block':'none'}
@@ -577,25 +596,52 @@ p{color:#9c9a92;font-size:13px;margin-top:6px}</style>
         elif path in ('/forgot-password', '/reset-password'):
             self.send_html(FORGOT_HTML)
         elif path == '/done':
-            # Login successful - show brief success then close window
             done_html = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#f9f9f8;display:flex;align-items:center;justify-content:center;height:100vh}
-.card{text-align:center;padding:40px;background:#fff;border-radius:16px;border:0.5px solid rgba(0,0,0,0.1);max-width:360px;width:90%}
-.icon{width:60px;height:60px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px}
-h2{font-size:20px;font-weight:500;color:#1a1917;margin-bottom:8px}p{font-size:13px;color:#9c9a92;line-height:1.6}
-.bar{height:3px;background:#f3f4f6;border-radius:2px;margin-top:24px;overflow:hidden}
-.fill{height:100%;background:#16a34a;border-radius:2px;animation:fill 2s linear forwards}
-@keyframes fill{from{width:0}to{width:100%}}</style>
-<script>setTimeout(()=>window.close(),2000)</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+*,*::before,*::after{cursor:none!important}
+body{font-family:'Inter',sans-serif;background:#f9f9f8;display:flex;align-items:center;justify-content:center;height:100vh}
+.card{text-align:center;padding:48px 40px;background:#fff;border-radius:16px;border:0.5px solid rgba(0,0,0,0.1);max-width:380px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
+.icon{width:64px;height:64px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:30px}
+h2{font-size:21px;font-weight:500;color:#1a1917;margin-bottom:6px;letter-spacing:-0.3px}
+.sub{font-size:13px;color:#9c9a92;line-height:1.6;margin-bottom:28px}
+.num{font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:500;color:#1a1917;margin-bottom:6px}
+.closing{font-size:11px;color:#b4b2a9;text-transform:uppercase;letter-spacing:0.08em}
+.ring{width:80px;height:80px;margin:0 auto 12px;position:relative}
+.ring svg{transform:rotate(-90deg)}
+.rb{fill:none;stroke:#f3f4f6;stroke-width:5}
+.rf{fill:none;stroke:#16a34a;stroke-width:5;stroke-linecap:round;stroke-dasharray:220;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear}
+</style>
 </head><body>
 <div class="card">
   <div class="icon">&#9989;</div>
   <h2>Session started!</h2>
-  <p>Welcome, SESSION_USERNAME<br>Your lab session is now being tracked.<br>This window will close automatically.</p>
-  <div class="bar"><div class="fill"></div></div>
-</div></body></html>""".replace('SESSION_USERNAME', state.get('username',''))
+  <div class="sub">Welcome, <strong>UNAME</strong><br>Your session is being tracked silently.</div>
+  <div class="ring">
+    <svg width="80" height="80" viewBox="0 0 80 80">
+      <circle class="rb" cx="40" cy="40" r="35"/>
+      <circle class="rf" id="rf" cx="40" cy="40" r="35"/>
+    </svg>
+  </div>
+  <div class="num" id="num">3</div>
+  <div class="closing">Closing automatically</div>
+</div>
+<script>
+let n=3;
+const rf=document.getElementById('rf');
+const nd=document.getElementById('num');
+function tick(){
+  rf.style.strokeDashoffset=220*(1-n/3);
+  nd.textContent=n;
+  if(n<=0){window.close();return;}
+  n--;
+  setTimeout(tick,1000);
+}
+tick();
+</script>
+</body></html>""".replace('UNAME', state.get('username','Student'))
             self.send_html(done_html)
         elif path == '/session':
             if not state['session_id']:
@@ -678,7 +724,11 @@ def install_startup():
     try:
         import winreg
         script = os.path.abspath(__file__)
-        cmd    = f'"{sys.executable}" "{script}"'
+        # Use pythonw.exe to run without any console window
+        pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
+        if not os.path.exists(pythonw):
+            pythonw = sys.executable
+        cmd = f'"{pythonw}" "{script}"'
         try:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                 r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run',
@@ -717,7 +767,6 @@ if __name__ == '__main__':
 
     import subprocess
 
-    print(f'KCE Login App | {LAB_ID.upper()} | {MACHINE_LABEL} | {BASE_URL}')
 
     threading.Thread(target=idle_checker, daemon=True).start()
     threading.Thread(target=heartbeat,    daemon=True).start()
@@ -750,7 +799,6 @@ if __name__ == '__main__':
         import webbrowser
         webbrowser.open(url)
 
-    print('Portal open. Waiting for login...')
 
     # Keep running silently
     try:
