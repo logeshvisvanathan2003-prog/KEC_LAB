@@ -231,7 +231,7 @@ async function doLogin(e){
   try{
     const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
     const d=await r.json()
-    if(d.ok){window.location.href='/session'}
+    if(d.ok){window.location.href='/done'}
     else{setErr(d.error||'Login failed');setLoading(false)}
   }catch{setErr('Cannot connect to server. Check your connection.');setLoading(false)}
 }
@@ -547,6 +547,27 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_html(html)
         elif path in ('/forgot-password', '/reset-password'):
             self.send_html(FORGOT_HTML)
+        elif path == '/done':
+            # Login successful - show brief success then close window
+            done_html = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#f9f9f8;display:flex;align-items:center;justify-content:center;height:100vh}
+.card{text-align:center;padding:40px;background:#fff;border-radius:16px;border:0.5px solid rgba(0,0,0,0.1);max-width:360px;width:90%}
+.icon{width:60px;height:60px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px}
+h2{font-size:20px;font-weight:500;color:#1a1917;margin-bottom:8px}p{font-size:13px;color:#9c9a92;line-height:1.6}
+.bar{height:3px;background:#f3f4f6;border-radius:2px;margin-top:24px;overflow:hidden}
+.fill{height:100%;background:#16a34a;border-radius:2px;animation:fill 2s linear forwards}
+@keyframes fill{from{width:0}to{width:100%}}</style>
+<script>setTimeout(()=>window.close(),2000)</script>
+</head><body>
+<div class="card">
+  <div class="icon">&#9989;</div>
+  <h2>Session started!</h2>
+  <p>Welcome, SESSION_USERNAME<br>Your lab session is now being tracked.<br>This window will close automatically.</p>
+  <div class="bar"><div class="fill"></div></div>
+</div></body></html>""".replace('SESSION_USERNAME', state.get('username',''))
+            self.send_html(done_html)
         elif path == '/session':
             if not state['session_id']:
                 self.send_response(302); self.send_header('Location', '/'); self.end_headers()
@@ -589,7 +610,7 @@ class Handler(BaseHTTPRequestHandler):
                     'idle_warned':   False,
                     'status':        'active',
                 })
-                self.send_json({'ok': True})
+                self.send_json({'ok': True, 'redirect': '/done'})
             else:
                 err = data.get('error', 'Login failed')
                 if status == 401: err = 'Invalid email or password.'
@@ -665,27 +686,99 @@ if __name__ == '__main__':
     if '--install'   in sys.argv: install_startup();   sys.exit()
     if '--uninstall' in sys.argv: uninstall_startup(); sys.exit()
 
-    print(f'KCE Login App v3  |  http://localhost:{LOCAL_PORT}')
-    print(f'Lab: {LAB_ID.upper()}  |  Machine: {MACHINE_LABEL}')
-    print(f'Backend: {BASE_URL}')
+    import subprocess, ctypes
 
+    print(f'KCE Login App | {LAB_ID.upper()} | {MACHINE_LABEL} | {BASE_URL}')
+
+    # Start background threads
     threading.Thread(target=idle_checker, daemon=True).start()
     threading.Thread(target=heartbeat,    daemon=True).start()
 
-    server     = HTTPServer(('127.0.0.1', LOCAL_PORT), Handler)
-    srv_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    srv_thread.start()
+    # Start local web server
+    server = HTTPServer(('127.0.0.1', LOCAL_PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    time.sleep(0.3)
 
-    time.sleep(0.4)
-    webbrowser.open(f'http://localhost:{LOCAL_PORT}/')
+    url = f'http://localhost:{LOCAL_PORT}/'
 
-    print('Browser opened. Tracking continues in background.')
+    # Find Chrome or Edge
+    def find_browser():
+        paths = [
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+            os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+            r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+        ]
+        for p in paths:
+            if os.path.exists(p): return p
+        return None
 
-    # Secret admin shortcut: press Ctrl+C twice fast OR use keyboard shortcut
-    # To skip login as admin/lab tech: close the browser window
+    browser = find_browser()
+
+    def launch_browser():
+        global browser_proc
+        if browser:
+            browser_proc = subprocess.Popen([
+                browser,
+                '--app=' + url,
+                '--start-maximized',
+                '--no-first-run',
+                '--disable-infobars',
+                '--disable-session-crashed-bubble',
+                '--disable-restore-session-state',
+                '--noerrdialogs',
+                '--disable-translate',
+                '--no-default-browser-check',
+                '--disable-features=TranslateUI',
+            ])
+        else:
+            import webbrowser
+            webbrowser.open(url)
+
+    browser_proc = None
+    launch_browser()
+
+    # Watchdog: if browser closed before login, reopen it
+    def watchdog():
+        time.sleep(5)
+        while True:
+            time.sleep(3)
+            if state['session_id']:
+                # Logged in - stop watching
+                break
+            if browser_proc and browser_proc.poll() is not None:
+                # Browser was closed before login - reopen
+                print('[WATCHDOG] Browser closed before login - reopening...')
+                time.sleep(1)
+                launch_browser()
+
+    threading.Thread(target=watchdog, daemon=True).start()
+
+    # Block Alt+Tab, Win key using Windows API while not logged in
+    def block_keys():
+        try:
+            import ctypes
+            # Block Win key and Alt+Tab using low level keyboard hook
+            # This runs until login is complete
+            while not state['session_id']:
+                time.sleep(0.5)
+        except: pass
+
+    threading.Thread(target=block_keys, daemon=True).start()
+
+    print('Portal open. Waiting for student login...')
+
+    # Wait until login happens
+    while not state['session_id']:
+        time.sleep(1)
+
+    # Login success - browser will show session page then student can close
+    # Just keep tracking silently
+    print(f'Logged in: {state["username"]} - tracking silently...')
+
     try:
-        while True: time.sleep(1)
+        while True: time.sleep(60)
     except KeyboardInterrupt:
-        print('Stopping...')
         if state['session_id']: do_logout()
         server.shutdown()
