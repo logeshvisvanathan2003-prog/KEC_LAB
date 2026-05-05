@@ -1,11 +1,11 @@
 """
 KCE Lab — Agent Login App v3 (kce_login_app.py)
 ================================================
-• Claude-design UI with custom cursor effect
-• Opens in browser automatically on Windows login
-• Idle 15 min → beautiful alert: "Hi {name}, I see you've been inactive..."
-• Idle 50 min → auto logout
-• Tracks sessions in backend DB
+- Claude-design UI with custom cursor effect
+- Opens in browser automatically on Windows login
+- Idle 15 min: alert appears
+- Idle 50 min: auto logout
+- Tracks sessions in backend DB
 
 Run:     python kce_login_app.py
 Install: python kce_login_app.py --install
@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 import urllib.request, urllib.error
 
-# ── Load .env ─────────────────────────────────────────────────────────────────
+# Load .env
 _env = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 if os.path.exists(_env):
     with open(_env) as f:
@@ -27,15 +27,15 @@ if os.path.exists(_env):
                 k, _, v = line.partition('=')
                 os.environ.setdefault(k.strip(), v.strip().split('#')[0].strip())
 
-LAB_ID         = os.getenv('LAB_ID', 'cc1').lower()
-_server_url    = os.getenv('SERVER_URL', '').strip()
-SERVER_IP      = os.getenv('SERVER_IP', 'localhost')
-SERVER_PORT    = os.getenv('SERVER_PORT', '5000')
-MACHINE_LABEL  = os.getenv('MACHINE_LABEL', '').strip() or socket.gethostname()
-BASE_URL       = _server_url.rstrip('/') if _server_url else f"http://{SERVER_IP}:{SERVER_PORT}"
-LOCAL_PORT     = 8765
-IDLE_WARN_SEC  = 15 * 60   # 15 min
-IDLE_LOGOFF_SEC= 50 * 60   # 50 min
+LAB_ID          = os.getenv('LAB_ID', 'cc1').lower()
+_server_url     = os.getenv('SERVER_URL', '').strip()
+SERVER_IP       = os.getenv('SERVER_IP', 'localhost')
+SERVER_PORT     = os.getenv('SERVER_PORT', '5000')
+MACHINE_LABEL   = os.getenv('MACHINE_LABEL', '').strip() or socket.gethostname()
+BASE_URL        = _server_url.rstrip('/') if _server_url else f"http://{SERVER_IP}:{SERVER_PORT}"
+LOCAL_PORT      = 8765
+IDLE_WARN_SEC   = 15 * 60
+IDLE_LOGOFF_SEC = 50 * 60
 
 state = {
     'session_id':    None,
@@ -103,10 +103,6 @@ def do_logout():
         api_post('/system/logout', {'session_id': sid})
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HTML PAGES — Claude design system
-# ══════════════════════════════════════════════════════════════════════════════
-
 CURSOR_JS = """
 (function(){
   const dot=document.createElement('div');
@@ -147,7 +143,7 @@ LOGIN_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>KCE Lab — Sign In</title>
+<title>KCE Lab - Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -208,11 +204,11 @@ input::placeholder{color:#b4b2a9}
     <h1>Sign in</h1>
     <p class="sub">Sign in with your Kongu Engineering College email</p>
     <form onsubmit="doLogin(event)">
-      <label>Username</label>
-      <div class="iw"><input id="un" type="text" placeholder="your@kongu.edu email" autocomplete="email" type="email" required/></div>
+      <label>Email</label>
+      <div class="iw"><input id="un" type="email" placeholder="your@kongu.edu" autocomplete="email" required/></div>
       <label>Password</label>
       <div class="iw">
-        <input id="pw" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required style="padding-right:36px"/>
+        <input id="pw" type="password" placeholder="Enter your password" autocomplete="current-password" required style="padding-right:36px"/>
         <button class="eye" type="button" onclick="togglePwd()"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg></button>
       </div>
       <div class="forg"><a href="/forgot-password">Forgot password?</a></div>
@@ -249,14 +245,12 @@ SESSION_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>KCE Lab — Session Active</title>
+<title>KCE Lab - Session Active</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 *,*::before,*::after{cursor:none!important}
 body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:100vh;-webkit-font-smoothing:antialiased;font-size:14px}
-
-/* ── Idle alert overlay ── */
 #idleOverlay{display:none;position:fixed;inset:0;z-index:9000;align-items:center;justify-content:center;background:rgba(249,249,248,0.82);backdrop-filter:blur(4px)}
 #idleOverlay.show{display:flex;animation:fadeIn .25s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -274,16 +268,12 @@ body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:
 .alert-btn:hover{opacity:.86}
 .alert-btn-sec{width:100%;height:38px;background:#fff;color:#5c5b57;border:0.5px solid rgba(0,0,0,0.15);border-radius:9px;font-size:13px;font-weight:400;font-family:inherit}
 .alert-btn-sec:hover{background:#f9f9f8}
-
-/* ── Auto-logout overlay ── */
 #logoutOverlay{display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:#f9f9f8}
 #logoutOverlay.show{display:flex;animation:fadeIn .3s ease}
 .logout-card{text-align:center;max-width:360px;padding:20px}
 .logout-icon{width:64px;height:64px;border-radius:16px;background:#fef2f2;border:0.5px solid #fecaca;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
 .logout-btn{padding:11px 32px;background:#1a1917;color:#fff;border:none;border-radius:9px;font-size:13.5px;font-weight:500;font-family:inherit;margin-top:20px}
 .logout-btn:hover{opacity:.86}
-
-/* ── Main session UI ── */
 .wrap{max-width:560px;margin:0 auto;padding:28px 20px}
 .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;padding-bottom:18px;border-bottom:0.5px solid rgba(0,0,0,0.08)}
 .logo{display:flex;align-items:center;gap:8px}
@@ -306,8 +296,6 @@ body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:
 </style>
 </head>
 <body>
-
-<!-- Idle Alert Overlay -->
 <div id="idleOverlay">
   <div class="alert-card">
     <div class="alert-icon">&#128075;</div>
@@ -322,23 +310,19 @@ body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:
     </div>
     <button class="alert-btn" onclick="iAmHere()">
       <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      I'm here! &mdash; Cognentrz is active
+      I'm here! - Cognentrz is active
     </button>
     <button class="alert-btn-sec" onclick="doLogout()">Log out now</button>
   </div>
 </div>
-
-<!-- Auto-logout Overlay -->
 <div id="logoutOverlay">
   <div class="logout-card">
     <div class="logout-icon">&#128274;</div>
     <div style="font-size:22px;font-weight:500;color:#1a1917;margin-bottom:6px;letter-spacing:-0.4px">Session ended</div>
-    <div style="font-size:13px;color:#9c9a92;line-height:1.65">Automatically logged out after 50 minutes of inactivity. This session has been recorded.</div>
+    <div style="font-size:13px;color:#9c9a92;line-height:1.65">Automatically logged out after 50 minutes of inactivity.</div>
     <button class="logout-btn" onclick="window.location.href='/'">Sign in again &rarr;</button>
   </div>
 </div>
-
-<!-- Main UI -->
 <div class="wrap">
   <div class="hd">
     <div class="logo">
@@ -353,7 +337,6 @@ body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:
       <button class="logout-link" onclick="doLogout()">&#9167; Logout</button>
     </div>
   </div>
-
   <div class="card">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:0.5px solid rgba(0,0,0,0.06)">
       <div class="avatar" id="av">?</div>
@@ -366,31 +349,29 @@ body{font-family:'Inter',sans-serif;background:#f9f9f8;color:#1a1917;min-height:
     <div class="grid">
       <div class="cell"><div class="cl">Machine</div><div class="cv">{MACHINE_LABEL}</div></div>
       <div class="cell"><div class="cl">Lab</div><div class="cv">{LAB_ID_UPPER}</div></div>
-      <div class="cell"><div class="cl">Login time</div><div class="cv" id="loginTimeVal">—</div></div>
+      <div class="cell"><div class="cl">Login time</div><div class="cv" id="loginTimeVal">--</div></div>
       <div class="cell"><div class="cl">Duration</div><div class="cv" style="color:#2563eb" id="durText">0m</div></div>
     </div>
-    <button class="active-btn" onclick="iAmHere()">&#10003; I'm active — reset idle timer</button>
-    <div class="idle-info">&#9888;&#65039; Idle 15 min &rarr; alert appears &nbsp;&nbsp;&nbsp; &#128274; Idle 50 min &rarr; auto logout</div>
+    <button class="active-btn" onclick="iAmHere()">&#10003; I'm active - reset idle timer</button>
+    <div class="idle-info">&#9888; Idle 15 min &rarr; alert appears &nbsp;&nbsp; &#128274; Idle 50 min &rarr; auto logout</div>
   </div>
   <div class="foot">Developed by <strong style="color:#1a1917">Logesh</strong> &middot; Cognentrz</div>
 </div>
-
 <script>
 const WARN_MS={IDLE_WARN_MS}, LOGOFF_MS={IDLE_LOGOFF_MS};
 let lastActivity=Date.now(), warned=false, loginTs=Date.now(), alive=true;
 
-['mousemove','keydown','click','scroll','touchstart'].forEach(ev=>
+['mousemove','keydown','click','scroll','touchstart'].forEach(ev=>{
   window.addEventListener(ev,()=>{
     lastActivity=Date.now();
     if(warned){iAmHere();}
-  },{passive:true})
-);
+  },{passive:true});
+});
 
 function checkIdle(){
   if(!alive)return;
   const idle=Date.now()-lastActivity;
   const remaining=Math.max(0,Math.ceil((LOGOFF_MS-idle)/60000));
-  // Update countdown ring
   const pct=Math.max(0,(LOGOFF_MS-idle)/LOGOFF_MS);
   document.getElementById('ringFill').style.strokeDashoffset=188*(1-pct);
   document.getElementById('ringText').textContent=remaining+'m';
@@ -409,16 +390,16 @@ setInterval(checkIdle,10000);
 
 function updateTimer(){
   const secs=Math.floor((Date.now()-loginTs)/1000);
-  const h=Math.floor(secs/3600), m=Math.floor(secs%3600/60), s=secs%60;
+  const h=Math.floor(secs/3600),m=Math.floor(secs%3600/60),s=secs%60;
   document.getElementById('timerVal').textContent=
     String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   const mins=Math.floor(secs/60);
-  document.getElementById('durText').textContent=h>0?`${h}h ${m}m`:`${mins}m`;
+  document.getElementById('durText').textContent=h>0?h+'h '+m+'m':mins+'m';
 }
 setInterval(updateTimer,1000);
 
 function iAmHere(){
-  lastActivity=Date.now(); warned=false;
+  lastActivity=Date.now();warned=false;
   document.getElementById('idleOverlay').classList.remove('show');
   fetch('/active',{method:'POST'}).catch(()=>{});
 }
@@ -433,8 +414,8 @@ fetch('/state').then(r=>r.json()).then(d=>{
   document.getElementById('welcome').textContent='Welcome, '+d.username;
   document.getElementById('av').textContent=d.username[0].toUpperCase();
   document.getElementById('alertName').textContent=d.username;
-  document.getElementById('loginTimeVal').textContent=d.login_time||'—';
-  if(d.login_ts) loginTs=d.login_ts*1000;
+  document.getElementById('loginTimeVal').textContent=d.login_time||'--';
+  if(d.login_ts){loginTs=d.login_ts*1000;updateTimer();}
 });
 </script>
 <script>CURSOR_PLACEHOLDER</script>
@@ -446,7 +427,7 @@ FORGOT_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>KCE Lab — Reset Password</title>
+<title>KCE Lab - Reset Password</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -488,8 +469,8 @@ input::placeholder{color:#b4b2a9}
     <a href="/" style="display:inline-block;padding:9px 22px;background:#1a1917;color:#fff;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none">Login now &rarr;</a>
   </div>
   <div id="formArea">
-    <label>Username</label>
-    <div class="iw"><input id="un" type="text" placeholder="your@kongu.edu email" autocomplete="email" type="email"/></div>
+    <label>Email</label>
+    <div class="iw"><input id="un" type="email" placeholder="your@kongu.edu"/></div>
     <label>New password</label>
     <div class="iw">
       <input id="np" type="password" placeholder="Min. 4 characters" style="padding-right:36px"/>
@@ -514,7 +495,7 @@ function setLoading(v){document.getElementById('sp').style.display=v?'block':'no
 async function doReset(){
   setErr('');
   const u=document.getElementById('un').value.trim(),n=document.getElementById('np').value,c=document.getElementById('cp').value;
-  if(!u){setErr('Enter your username');return}
+  if(!u){setErr('Enter your email');return}
   if(!n||n.length<4){setErr('Password must be at least 4 characters');return}
   if(n!==c){setErr('Passwords do not match');return}
   setLoading(true);
@@ -522,8 +503,8 @@ async function doReset(){
     const r=await fetch('/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,new_password:n})});
     const d=await r.json();
     if(d.ok){document.getElementById('formArea').style.display='none';document.getElementById('okBox').style.display='block'}
-    else{setErr(d.error||'Reset failed — check your username');setLoading(false)}
-  }catch{setErr('Connection error — is the server running?');setLoading(false)}
+    else{setErr(d.error||'Reset failed - check your email');setLoading(false)}
+  }catch{setErr('Connection error');setLoading(false)}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter')doReset()});
 </script>
@@ -532,7 +513,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter')doReset()});
 </html>"""
 
 
-# ── HTTP Handler ───────────────────────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -612,7 +592,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({'ok': True})
             else:
                 err = data.get('error', 'Login failed')
-                if status == 401: err = 'Invalid username or password.'
+                if status == 401: err = 'Invalid email or password.'
                 elif status == 403: err = 'Account disabled. Contact your lab admin.'
                 elif status == 0: err = 'Cannot reach server. Check your network connection.'
                 self.send_json({'ok': False, 'error': err}, 401)
@@ -644,35 +624,43 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers()
 
 
-# ── Windows startup installer ──────────────────────────────────────────────────
 def install_startup():
     try:
         import winreg
         script = os.path.abspath(__file__)
         cmd    = f'"{sys.executable}" "{script}"'
-        key    = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                     r'Software\Microsoft\Windows\CurrentVersion\Run',
-                     0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, 'KCELabLogin', 0, winreg.REG_SZ, cmd)
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run',
+                0, winreg.KEY_SET_VALUE)
+        except Exception:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r'Software\Microsoft\Windows\CurrentVersion\Run',
+                0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, 'KCELabAgent', 0, winreg.REG_SZ, cmd)
         winreg.CloseKey(key)
-        print(f'Installed to Windows startup: {cmd}')
+        print(f'Startup registered: {cmd}')
     except Exception as e:
         print(f'Install failed: {e}')
 
 def uninstall_startup():
     try:
         import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                 r'Software\Microsoft\Windows\CurrentVersion\Run',
-                 0, winreg.KEY_SET_VALUE)
-        winreg.DeleteValue(key, 'KCELabLogin')
-        winreg.CloseKey(key)
-        print('Removed from Windows startup.')
+        for hive, path in [
+            (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run'),
+            (winreg.HKEY_CURRENT_USER,  r'Software\Microsoft\Windows\CurrentVersion\Run'),
+        ]:
+            try:
+                k = winreg.OpenKey(hive, path, 0, winreg.KEY_SET_VALUE)
+                winreg.DeleteValue(k, 'KCELabAgent')
+                winreg.CloseKey(k)
+            except Exception:
+                pass
+        print('Startup removed.')
     except Exception as e:
         print(f'Uninstall failed: {e}')
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     if '--install'   in sys.argv: install_startup();   sys.exit()
     if '--uninstall' in sys.argv: uninstall_startup(); sys.exit()
@@ -680,7 +668,6 @@ if __name__ == '__main__':
     print(f'KCE Login App v3  |  http://localhost:{LOCAL_PORT}')
     print(f'Lab: {LAB_ID.upper()}  |  Machine: {MACHINE_LABEL}')
     print(f'Backend: {BASE_URL}')
-    print()
 
     threading.Thread(target=idle_checker, daemon=True).start()
     threading.Thread(target=heartbeat,    daemon=True).start()
@@ -692,10 +679,10 @@ if __name__ == '__main__':
     time.sleep(0.4)
     webbrowser.open(f'http://localhost:{LOCAL_PORT}/')
 
-    print('Browser opened. Minimize this window — tracking continues in background.')
-    print('Press Ctrl+C to stop.')
-    print()
+    print('Browser opened. Tracking continues in background.')
 
+    # Secret admin shortcut: press Ctrl+C twice fast OR use keyboard shortcut
+    # To skip login as admin/lab tech: close the browser window
     try:
         while True: time.sleep(1)
     except KeyboardInterrupt:
