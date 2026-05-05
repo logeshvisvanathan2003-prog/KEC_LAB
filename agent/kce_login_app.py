@@ -149,6 +149,18 @@ LOGIN_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>KCE Lab — Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script>
+// Block all skip attempts
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'||e.key==='F4'||(e.altKey&&e.key==='F4')||(e.ctrlKey&&e.key==='w')||(e.ctrlKey&&e.key==='W')){
+    e.preventDefault();e.stopPropagation();return false;
+  }
+},true);
+document.addEventListener('contextmenu',function(e){e.preventDefault();});
+history.pushState(null,null,location.href);
+window.addEventListener('popstate',function(){history.pushState(null,null,location.href);});
+window.onbeforeunload=function(){return '';};
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 *,*::before,*::after{cursor:none!important}
@@ -690,101 +702,51 @@ def uninstall_startup():
         print(f'Uninstall failed: {e}')
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main --
 if __name__ == '__main__':
     if '--install'   in sys.argv: install_startup();   sys.exit()
     if '--uninstall' in sys.argv: uninstall_startup(); sys.exit()
 
-    print(f'KCE Login App v3  |  http://localhost:{LOCAL_PORT}')
-    print(f'Lab: {LAB_ID.upper()}  |  Machine: {MACHINE_LABEL}')
-    print(f'Backend: {BASE_URL}')
-    print()
+    print(f'KCE Login App | Lab: {LAB_ID.upper()} | {BASE_URL}')
 
+    # Start background threads
     threading.Thread(target=idle_checker, daemon=True).start()
     threading.Thread(target=heartbeat,    daemon=True).start()
 
+    # Start local HTTP server
     server     = HTTPServer(('127.0.0.1', LOCAL_PORT), Handler)
     srv_thread = threading.Thread(target=server.serve_forever, daemon=True)
     srv_thread.start()
+    time.sleep(1)
 
-    time.sleep(0.8)
+    # Open browser with app mode (no address bar, no toolbar)
+    import subprocess, os as _os
 
-    # ── Open in kiosk mode (cannot be closed/skipped until login) ──────────────
-    import subprocess, shutil
+    url = f'http://localhost:{LOCAL_PORT}/'
 
-    def open_kiosk():
-        url = f'http://localhost:{LOCAL_PORT}/'
-        # Try Chrome kiosk first
+    def open_portal():
         chrome_paths = [
             r'C:\Program Files\Google\Chrome\Application\chrome.exe',
             r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-            os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
-        ]
-        edge_paths = [
+            _os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
             r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
             r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
         ]
-        # Kiosk flags: fullscreen, no address bar, no close button, no escape
-        kiosk_flags = [
-            '--kiosk',
-            '--fullscreen',
-            '--no-first-run',
-            '--disable-infobars',
-            '--disable-session-crashed-bubble',
-            '--disable-restore-session-state',
-            '--noerrdialogs',
-            '--disable-translate',
-            '--no-default-browser-check',
-            url
-        ]
         for path in chrome_paths:
-            if os.path.exists(path):
-                subprocess.Popen([path] + kiosk_flags)
-                print(f'Opened Chrome kiosk: {path}')
+            if _os.path.exists(path):
+                subprocess.Popen([path, '--app=' + url,
+                    '--start-maximized', '--no-first-run',
+                    '--disable-infobars', '--no-default-browser-check'])
                 return
-        for path in edge_paths:
-            if os.path.exists(path):
-                subprocess.Popen([path] + kiosk_flags)
-                print(f'Opened Edge kiosk: {path}')
-                return
-        # Fallback to default browser
         webbrowser.open(url)
-        print('Opened default browser (kiosk not available)')
 
-    open_kiosk()
+    open_portal()
+    print('Portal opened. Waiting for student login...')
 
-    # ── Watchdog: reopen browser if closed before login ───────────────────────
-    def watchdog():
-        import ctypes
-        time.sleep(5)
-        while True:
-            time.sleep(3)
-            # If not logged in yet, check if browser window is visible
-            if not state.get('session_id'):
-                # Check if any chrome/edge/browser process is running
-                result = subprocess.run(
-                    ['tasklist', '/FI', 'IMAGENAME eq chrome.exe', '/NH'],
-                    capture_output=True, text=True
-                )
-                result2 = subprocess.run(
-                    ['tasklist', '/FI', 'IMAGENAME eq msedge.exe', '/NH'],
-                    capture_output=True, text=True
-                )
-                chrome_running = 'chrome.exe' in result.stdout
-                edge_running   = 'msedge.exe' in result2.stdout
-                if not chrome_running and not edge_running:
-                    print('[WATCHDOG] Browser closed before login — reopening...')
-                    time.sleep(1)
-                    open_kiosk()
-
-    threading.Thread(target=watchdog, daemon=True).start()
-
-    print('Kiosk portal opened. Waiting for student login...')
-    print()
-
+    # Keep running silently after login
     try:
-        while True: time.sleep(1)
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
-        print('Stopping...')
         if state.get('session_id'): do_logout()
         server.shutdown()
