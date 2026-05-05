@@ -28,10 +28,11 @@ if os.path.exists(_env):
                 os.environ.setdefault(k.strip(), v.strip().split('#')[0].strip())
 
 LAB_ID         = os.getenv('LAB_ID', 'cc1').lower()
+_server_url    = os.getenv('SERVER_URL', '').strip()
 SERVER_IP      = os.getenv('SERVER_IP', 'localhost')
 SERVER_PORT    = os.getenv('SERVER_PORT', '5000')
 MACHINE_LABEL  = os.getenv('MACHINE_LABEL', '').strip() or socket.gethostname()
-BASE_URL       = f"http://{SERVER_IP}:{SERVER_PORT}"
+BASE_URL       = _server_url.rstrip('/') if _server_url else f"http://{SERVER_IP}:{SERVER_PORT}"
 LOCAL_PORT     = 8765
 IDLE_WARN_SEC  = 15 * 60   # 15 min
 IDLE_LOGOFF_SEC= 50 * 60   # 50 min
@@ -205,10 +206,10 @@ input::placeholder{color:#b4b2a9}
   <div class="card">
     <div class="status-chip"><span class="pulse"></span> System online</div>
     <h1>Sign in</h1>
-    <p class="sub">Enter your lab credentials below</p>
+    <p class="sub">Sign in with your Kongu Engineering College email</p>
     <form onsubmit="doLogin(event)">
       <label>Username</label>
-      <div class="iw"><input id="un" type="text" placeholder="your_username" autocomplete="username" required/></div>
+      <div class="iw"><input id="un" type="text" placeholder="your@kongu.edu email" autocomplete="email" type="email" required/></div>
       <label>Password</label>
       <div class="iw">
         <input id="pw" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required style="padding-right:36px"/>
@@ -479,7 +480,7 @@ input::placeholder{color:#b4b2a9}
     Back to login
   </a>
   <h1>Reset password</h1>
-  <p class="sub">Enter your username and a new password. No email needed — updates instantly.</p>
+  <p class="sub">Enter your kongu.edu email and set a new password.</p>
   <div id="okBox" class="ok" style="margin-bottom:16px">
     <div style="font-size:22px;margin-bottom:8px">&#9989;</div>
     <div style="font-weight:500;font-size:15px;margin-bottom:4px">Password updated!</div>
@@ -488,7 +489,7 @@ input::placeholder{color:#b4b2a9}
   </div>
   <div id="formArea">
     <label>Username</label>
-    <div class="iw"><input id="un" type="text" placeholder="Enter your username" autocomplete="username"/></div>
+    <div class="iw"><input id="un" type="text" placeholder="your@kongu.edu email" autocomplete="email" type="email"/></div>
     <label>New password</label>
     <div class="iw">
       <input id="np" type="password" placeholder="Min. 4 characters" style="padding-right:36px"/>
