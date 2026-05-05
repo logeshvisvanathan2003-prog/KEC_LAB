@@ -380,6 +380,24 @@ const WARN_MS={IDLE_WARN_MS}, LOGOFF_MS={IDLE_LOGOFF_MS};
 let lastActivity=Date.now(), warned=false, loginTs=Date.now(), alive=true;
 
 ['mousemove','keydown','click','scroll','touchstart'].forEach(ev=>
+  // Block escape, F4, Alt+F4, right-click, back navigation
+  document.addEventListener('keydown', function(e) {
+    // Block Escape, F4, Alt+F4, Ctrl+W, Alt+Left (back)
+    if (e.key === 'Escape' || e.key === 'F4' ||
+        (e.altKey && e.key === 'F4') ||
+        (e.ctrlKey && e.key === 'w') ||
+        (e.altKey && e.key === 'ArrowLeft')) {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }
+  }, true);
+  // Block right-click context menu
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  // Block browser back/forward
+  history.pushState(null, null, location.href);
+  window.addEventListener('popstate', function() {
+    history.pushState(null, null, location.href);
+  });
+
   window.addEventListener(ev,()=>{
     lastActivity=Date.now();
     if(warned){iAmHere();}
@@ -689,16 +707,84 @@ if __name__ == '__main__':
     srv_thread = threading.Thread(target=server.serve_forever, daemon=True)
     srv_thread.start()
 
-    time.sleep(0.4)
-    webbrowser.open(f'http://localhost:{LOCAL_PORT}/')
+    time.sleep(0.8)
 
-    print('Browser opened. Minimize this window — tracking continues in background.')
-    print('Press Ctrl+C to stop.')
+    # ── Open in kiosk mode (cannot be closed/skipped until login) ──────────────
+    import subprocess, shutil
+
+    def open_kiosk():
+        url = f'http://localhost:{LOCAL_PORT}/'
+        # Try Chrome kiosk first
+        chrome_paths = [
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+            os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+        ]
+        edge_paths = [
+            r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+        ]
+        # Kiosk flags: fullscreen, no address bar, no close button, no escape
+        kiosk_flags = [
+            '--kiosk',
+            '--fullscreen',
+            '--no-first-run',
+            '--disable-infobars',
+            '--disable-session-crashed-bubble',
+            '--disable-restore-session-state',
+            '--noerrdialogs',
+            '--disable-translate',
+            '--no-default-browser-check',
+            url
+        ]
+        for path in chrome_paths:
+            if os.path.exists(path):
+                subprocess.Popen([path] + kiosk_flags)
+                print(f'Opened Chrome kiosk: {path}')
+                return
+        for path in edge_paths:
+            if os.path.exists(path):
+                subprocess.Popen([path] + kiosk_flags)
+                print(f'Opened Edge kiosk: {path}')
+                return
+        # Fallback to default browser
+        webbrowser.open(url)
+        print('Opened default browser (kiosk not available)')
+
+    open_kiosk()
+
+    # ── Watchdog: reopen browser if closed before login ───────────────────────
+    def watchdog():
+        import ctypes
+        time.sleep(5)
+        while True:
+            time.sleep(3)
+            # If not logged in yet, check if browser window is visible
+            if not state.get('session_id'):
+                # Check if any chrome/edge/browser process is running
+                result = subprocess.run(
+                    ['tasklist', '/FI', 'IMAGENAME eq chrome.exe', '/NH'],
+                    capture_output=True, text=True
+                )
+                result2 = subprocess.run(
+                    ['tasklist', '/FI', 'IMAGENAME eq msedge.exe', '/NH'],
+                    capture_output=True, text=True
+                )
+                chrome_running = 'chrome.exe' in result.stdout
+                edge_running   = 'msedge.exe' in result2.stdout
+                if not chrome_running and not edge_running:
+                    print('[WATCHDOG] Browser closed before login — reopening...')
+                    time.sleep(1)
+                    open_kiosk()
+
+    threading.Thread(target=watchdog, daemon=True).start()
+
+    print('Kiosk portal opened. Waiting for student login...')
     print()
 
     try:
         while True: time.sleep(1)
     except KeyboardInterrupt:
         print('Stopping...')
-        if state['session_id']: do_logout()
+        if state.get('session_id'): do_logout()
         server.shutdown()
