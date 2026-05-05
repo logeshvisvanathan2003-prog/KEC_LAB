@@ -686,7 +686,7 @@ if __name__ == '__main__':
     if '--install'   in sys.argv: install_startup();   sys.exit()
     if '--uninstall' in sys.argv: uninstall_startup(); sys.exit()
 
-    import subprocess, ctypes
+    import subprocess
 
     print(f'KCE Login App | {LAB_ID.upper()} | {MACHINE_LABEL} | {BASE_URL}')
 
@@ -697,11 +697,11 @@ if __name__ == '__main__':
     # Start local web server
     server = HTTPServer(('127.0.0.1', LOCAL_PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    time.sleep(0.3)
+    time.sleep(0.5)
 
     url = f'http://localhost:{LOCAL_PORT}/'
 
-    # Find Chrome or Edge
+    # Find Chrome or Edge path
     def find_browser():
         paths = [
             r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -715,68 +715,50 @@ if __name__ == '__main__':
         return None
 
     browser = find_browser()
+    browser_proc = None
+    _launching = False  # prevent double-launch
 
     def launch_browser():
-        global browser_proc
-        if browser:
-            browser_proc = subprocess.Popen([
-                browser,
-                '--app=' + url,
-                '--start-maximized',
-                '--no-first-run',
-                '--disable-infobars',
-                '--disable-session-crashed-bubble',
-                '--disable-restore-session-state',
-                '--noerrdialogs',
-                '--disable-translate',
-                '--no-default-browser-check',
-                '--disable-features=TranslateUI',
-            ])
-        else:
-            import webbrowser
-            webbrowser.open(url)
+        global browser_proc, _launching
+        if _launching: return
+        _launching = True
+        try:
+            if browser:
+                browser_proc = subprocess.Popen([
+                    browser,
+                    '--app=' + url,
+                    '--start-maximized',
+                    '--no-first-run',
+                    '--disable-infobars',
+                    '--noerrdialogs',
+                    '--no-default-browser-check',
+                ])
+            else:
+                import webbrowser
+                webbrowser.open(url)
+        finally:
+            time.sleep(3)  # cooldown before allowing relaunch
+            _launching = False
 
-    browser_proc = None
-    launch_browser()
+    # Launch once on startup
+    threading.Thread(target=launch_browser, daemon=True).start()
 
-    # Watchdog: if browser closed before login, reopen it
+    # Watchdog: only reopen if browser exits AND student not logged in yet
     def watchdog():
-        time.sleep(5)
+        time.sleep(8)  # wait for browser to fully open first
         while True:
-            time.sleep(3)
+            time.sleep(5)
             if state['session_id']:
-                # Logged in - stop watching
-                break
-            if browser_proc and browser_proc.poll() is not None:
-                # Browser was closed before login - reopen
-                print('[WATCHDOG] Browser closed before login - reopening...')
-                time.sleep(1)
-                launch_browser()
+                break  # logged in - stop
+            if browser_proc and browser_proc.poll() is not None and not _launching:
+                print('[WATCHDOG] Browser closed before login - reopening once...')
+                threading.Thread(target=launch_browser, daemon=True).start()
 
     threading.Thread(target=watchdog, daemon=True).start()
 
-    # Block Alt+Tab, Win key using Windows API while not logged in
-    def block_keys():
-        try:
-            import ctypes
-            # Block Win key and Alt+Tab using low level keyboard hook
-            # This runs until login is complete
-            while not state['session_id']:
-                time.sleep(0.5)
-        except: pass
-
-    threading.Thread(target=block_keys, daemon=True).start()
-
     print('Portal open. Waiting for student login...')
 
-    # Wait until login happens
-    while not state['session_id']:
-        time.sleep(1)
-
-    # Login success - browser will show session page then student can close
-    # Just keep tracking silently
-    print(f'Logged in: {state["username"]} - tracking silently...')
-
+    # Keep running silently after login
     try:
         while True: time.sleep(60)
     except KeyboardInterrupt:
